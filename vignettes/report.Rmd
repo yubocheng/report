@@ -1,0 +1,95 @@
+---
+title: "Vignette Title"
+author:
+- name: First Author
+  affiliation: First Author's Affiliation
+- name: Second Author
+  affiliation: Second Author's Affiliation
+  email: corresponding@author.com
+package: packageName
+output:
+  BiocStyle::pdf_document2
+abstract: |
+  Description of your vignette
+vignette: |
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+# Abstract
+
+# Introduction
+
+# Representing and accessing SQL-based bioinformatics resources
+
+Background (2+ paragraphs):
+
+- what is an 'annotation' -- sybol mapping, genomic ranges
+- example use cases
+- current approach -- org.* and TxDb.* packages
+- limitations
+
+Organism.dplyr
+
+## Methods
+
+### Approach
+
+Data representation
+
+- use of sql
+- use dplyr
+- separation of sql code from R code
+
+Software development best practices
+
+- roxygen2 documentation
+- unit tests
+- programming principles: DRY (don't repeat yourself)
+
+### Features
+
+- symbol mapping
+- symbol / range coordination
+- filtering
+- efficient input into R; memory mangement; ....
+- ...
+
+## Results
+
+- ?? vignette
+
+## Discussion
+
+- Critical assessment of strengths & weakness of Organism.dplyr
+p- Integration with other _Biococondutor_ and _R_ packages
+- Future development directions
+
+# Coordinated on-disk representation of multiple bioinformatic exerperiments
+
+MultiExperimentDb
+
+Background
+
+- ...
+- Alternative / similar approaches: MultiAssayExperiment
+
+## Methods
+
+- On-disk representation
+- Use of DelayedMatrix
+
+## Results
+
+## Discussion
+
+# Summary and Conclusions
+
+# References
+
+# Appendix
+
+1. Organism.dplyr repository, emphasize man pages and vignette
+
+2. MultiExperimentDb
