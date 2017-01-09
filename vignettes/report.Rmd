@@ -25,12 +25,31 @@ vignette: |
 
 Background (2+ paragraphs):
 
-- what is an 'annotation' -- sybol mapping, genomic ranges
+- what is an 'annotation' -- symbol mapping, genomic ranges
 - example use cases
 - current approach -- org.* and TxDb.* packages
 - limitations
 
 Organism.dplyr
+
+## Background
+
+Annotation packages in Bioconductor which hold organism level and genomic 
+coordinates information are being used more and more by users who analyze of 
+high-throughput genomic data. 
+
+OrgDb packages are used for mapping between a central gene identifier and 
+other kinds of identifiers, while TxDb packages for connecting a set of 
+genomic coordinates to various transcript oriented features. However, since 
+organism level information and genomic coordinates information are stored in 
+different packages/databases, mapping between gene identifiers and genomic 
+ranges is not easy. For example, finding out transcript ranges according to 
+accession number.
+
+Organism.dplyr provides an alternative interface of gene identifier mapping 
+functionality of the OrgDb packages (e.g.,org.Hs.eg.db) and the genome 
+coordinate functionality of the TxDb packages (e.g., 
+TxDb.Hsapiens.UCSC.hg38.knownGene).
 
 ## Methods
 
@@ -48,12 +67,33 @@ Software development best practices
 - unit tests
 - programming principles: DRY (don't repeat yourself)
 
+#### Data representation
+
+Package Organism.dplyr stores data using on disk sqlite database file 
+combining data from a given 'TxDb' package and the corresponding 'org' 
+package, thus one database contains information of gene identifiers and 
+genomic coordinates. Once the database is created and stored at given 
+directory, it can be accessed another time. 
+
+Data of OrgDb and TxDb are reconstructed and new tables are created in sqlite
+file. SQL codes for creating the database, including both schema and data, 
+are stored in sql files, one file for each organism, separating from the rest
+of R codes. This strategy makes the SQL codes clean and easy to maintain. 
+
+A _src_organism_ object is created by this package to point to the database. 
+dplyr (a grammar of data manipulation) could be applied to object created by 
+this package.
+
+#### Software development
+
+
+
 ### Features
 
 - symbol mapping
 - symbol / range coordination
 - filtering
-- efficient input into R; memory mangement; ....
+- efficient input into R; memory management; ....
 - ...
 
 ## Results
