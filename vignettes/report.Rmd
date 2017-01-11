@@ -1,6 +1,6 @@
 ---
 title: "Summary of work on Organism.dplyr and MultiExperimentDb"
-author: "Yubo Chang"
+author: "Yubo Cheng"
 package: report 
 output:
   BiocStyle::html_document:
@@ -13,20 +13,27 @@ vignette: |
 
 # Abstract
 
+Bioinformatics has become an important part of many areas of biology, and the 
+methodology of extracting useful results from large amounts of raw data 
+effectively and efficiently plays an essential role in analyzing and 
+understanding bioinformatics data. Bioconductor contains plenty of resources of
+annotation data and experiment data, but it is not always easy and fast to 
+query them. 
+
+Two R packages: Organism.dplyr and MultiExperimentDb are developed for easier 
+use of genome wide annotation packages and comparison between multiple 
+experiments. Organism.dplyr provides an integrated presentation of mapping 
+between organism level information and genomic coordinates information, while 
+MultiExperimentDb provides functionality for storing and comparing multiple 
+bioinformatics experiments which contains large matrix data.  
+
 # Introduction
 
 # Representing and accessing SQL-based bioinformatics resources
 
 ## Background
-(2+ paragraphs):
 
-- what is an 'annotation' -- symbol mapping, genomic ranges
-- example use cases
-- current approach -- org.* and TxDb.* packages
-- limitations
-- Organism.dplyr
-
-Annotation packages in Bioconductor which hold organism level and genomic 
+Annotation packages in _Bioconductor_ which hold organism level and genomic 
 coordinates information are being used more and more by users who analyze of 
 high-throughput genomic data. 
 
@@ -48,9 +55,6 @@ TxDb.Hsapiens.UCSC.hg38.knownGene).
 ### Approach
 
 #### Data representation
-- use of sql
-- use dplyr
-- separation of sql code from R code
 
 Package Organism.dplyr stores data using on disk sqlite database file 
 combining data from a given 'TxDb' package and the corresponding 'org' 
@@ -64,48 +68,603 @@ are stored in sql files, one file for each organism, separating from the rest
 of R codes. This strategy makes the SQL codes clean and easy to maintain. 
 
 A _src_organism_ object is created by this package to point to the database. 
-dplyr (a grammar of data manipulation) could be applied to object created by 
-this package.
+R Package `dplyr` (a grammar of data manipulation) could be applied to object
+created by this package.
 
-#### Software development and best practices
+#### Software development
 
-- roxygen2 documentation
-- unit tests
-- programming principles: DRY (don't repeat yourself)
+Best practices are applied to the software development: 
+
+- Unit tests are created to make sure each module of the codes works 
+properly.
+- R Package `roxygen2` is used for documentation of namespace and help pages.
+- Object oriented programming is used for developing this package, and 
+repeated codes are extracted to separate functions for reuse.
 
 ### Features
 
-- symbol mapping
-- symbol / range coordination
-- filtering
-- efficient input into R; memory management; ....
-- ...
+This package provides functionalities of gene identifiers (entrez id, gene 
+symbol, ensembl id, accession number, ipi number, go id, etc.) mapping, as 
+well as mapping between identifiers and range coordinates (including 
+different levels: gene, transcription, exon and cds). 
+
+Filters can be applied to genomic coordinates extractor functions, and all 
+columns in the database can be possible filters. The filter functions give 
+users flexibility of extracting genomic coordinates using combination of 
+different conditions.
+
+With all the data stored in sqlite file on disk, users need to create a 
+_src_organism_ object to point to the database file, and only necessary data 
+is brought into _R_ instead of the whole database for each _R_ command.
 
 ## Results
 
-- ?? vignette
+### Constructing a _src_organism_
+
+#### Make sqlite datebase from 'TxDb' package
+
+The `src_organism()` constructor creates an on disk sqlite database file with
+data from a given 'TxDb' package and corresponding 'org' package. When dbpath
+is given, file is created at the given path, otherwise temporary file is
+created.
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages({
+    library(Organism.dplyr)
+    library(ggplot2)
+})
+```
+
+Running `src_organism()` without a given path will save the sqlite file to a
+tempdir():
+
+```{r}
+src <- src_organism("TxDb.Hsapiens.UCSC.hg38.knownGene")
+```
+
+Alternatively you can provide explicit path to where the sqlite file should
+be saved.
+
+```{r, eval=FALSE}
+src <- src_organism("TxDb.Hsapiens.UCSC.hg38.knownGene", "path/to/save/sqlite")
+```
+
+`supportedOrganisms()` provides a list of organisms with corresponding 'org' 
+and 'TxDb' packages being supported.
+
+```{r}
+supportedOrganisms()
+```
+
+#### Make sqlite datebase from organism name
+
+Organism name, genome and id could be specified to create sqlite database. 
+Organism name (either Organism or common name) must be provided to create the 
+database, if genome and/or id are not provided, most recent 'TxDb' package is 
+used.
+
+```{r, eval=FALSE}
+src <- src_ucsc("human", "path/to/save/sqlite")
+```
+
+#### Access existing sqlite file 
+
+Existing on disk sqlite file can be accessed without recreating the database. 
+
+```{r}
+path <- system.file("extdata", package = "Organism.dplyr")
+src <- src_organism(dbpath = paste0(path, "/example.sqlite"))
+src
+```
+
+### Common operations
+
+#### Basic operations
+
+All methods from package [dplyr][] can be used for a _src_organism_ object. 
+
+Look at all available tables. 
+```{r}
+src_tbls(src)
+```
+
+Look at data from one specific table. 
+```{r}
+tbl(src, "id")
+```
+
+Look at fields of one table. 
+```{r}
+colnames(tbl(src, "id"))
+```
+
+Below are some examples of querying tables using dplyr. 
+
+1. Gene symbol start with "BRCA"
+
+```{r}
+tbl(src, "id") %>% 
+    filter(symbol %like% "BRCA%") %>% 
+    dplyr::select(entrez, map, ensembl, symbol) %>% 
+    distinct() %>% arrange(symbol) %>% collect()
+```
+
+2. Go info for gene symbol "PTEN"
+
+```{r}
+inner_join(tbl(src, "id"), tbl(src, "id_go")) %>% 
+    filter(symbol == "PTEN") %>% 
+    dplyr::select(entrez, ensembl, symbol, go, evidence, ontology)
+```
+
+3. Genes transcripts count
+
+```{r}
+txcount <- inner_join(tbl(src, "id"), tbl(src, "ranges_tx")) %>% 
+    dplyr::select(symbol, tx_id) %>% 
+    group_by(symbol) %>% 
+    summarise(count = count(symbol)) %>% 
+    dplyr::select(symbol, count) %>% 
+    arrange(desc(count)) %>% 
+    collect(n=Inf)
+
+txcount
+```
+
+```{r, echo=FALSE}
+ggplot(txcount, aes(x = txcount$symbol[order(txcount$symbol)], 
+                    y = txcount$count)) +
+    geom_point() + 
+    ggtitle("Transcript count") + 
+    labs(x = "symbol") + 
+    labs(y = "count")
+```
+
+4. Gene coordinates of symbol "PTEN" and "BRCA1" as _GRanges_
+
+```{r}
+inner_join(tbl(src, "id"), tbl(src, "ranges_gene")) %>% 
+    filter(symbol %in% c("PTEN", "BRCA1")) %>% 
+    dplyr::select(gene_chrom, gene_start, gene_end, gene_strand, 
+                  symbol, map) %>% 
+    collect() %>% GenomicRanges::GRanges() 
+```
+
+#### "select" interface 
+
+Methods `select()`, `keytypes()`, `keys()`, `columns()` and `mapIds` from 
+`r Biocpkg("AnnotationDbi")` are implemented for _src_organism_ objects.
+
+1. `keytypes()`
+
+Use `keytypes()` to discover which keytypes can be passed to keytype argument 
+of methods `select()` or `keys()`.
+
+```{r}
+keytypes(src)
+```
+
+2. `columns()`
+
+Use `columns()` to discover which kinds of data can be returned for the 
+_src_organism_ object.
+
+```{r}
+columns(src)
+```
+
+3. `keys()`
+
+`keys()` returns keys for the _src_organism_ object. By default it returns the 
+primary keys for the database, and returns the keys from that keytype when the 
+keytype argument is used.
+
+Keys of entrez
+
+```{r}
+head(keys(src))
+```
+
+Keys of symbol
+
+```{r}
+head(keys(src, "symbol"))
+```
+
+4. `select()`
+
+`select()` retrieves the data as a _tibble_ based on parameters for selected 
+keys columns and keytype arguments. If requested columns that have multiple 
+matches for the keys, `select_tbl()` will return a _tibble_ with one row for
+each possible match, and `select()` will return a data frame.
+ 
+
+```{r}
+keytype <- "symbol"
+keys <- c("PTEN", "BRCA1")
+columns <- c("entrez", "tx_id", "tx_name","exon_id")
+select_tbl(src, keys, columns, keytype)
+```
+
+5. `mapIds()`
+
+`mapIds()` gets the mapped ids (column) for a set of keys that are of a 
+particular keytype. Usually returned as a named character vector.
+
+```{r}
+mapIds(src, keys, column = "tx_name", keytype)
+```
+
+#### Genomic coordinates extractors
+
+Eleven genomic coordinates extractor methods are available in this package: 
+`transcripts()`, `exons()`, `cds()`, `genes()`, `promoters()`, 
+`transcriptsBy()`, `exonsBy()`, `cdsBy()`, `intronsByTranscript()`, 
+`fiveUTRsByTranscript()`, `threeUTRsByTranscript()`. Two versions of results 
+are provided: _tibble_ (`transcripts_tbl()`) and _GRanges_ or _GRangesList_ 
+(`transcripts()`). 
+
+Filter can be applied to all extractor functions. A named list of vectors can 
+be used to restrict the output, valid filters can be retrieved by 
+`possibleFilters()`. 
+
+```{r}
+possibleFilters()
+```
+
+All filters take two parameters: value and condition, condition could be one of 
+"==", "!=", "startsWith", "endsWith", ">", "<", ">=" and "<=", default 
+condition is "==".
+
+```{r}
+EnsemblFilter("ENSG00000171862")
+SymbolFilter("BRCA", "startsWith")
+```
+
+
+Besides, `GRangesFilter()` could also be used as filter for the methods with 
+result displaying as _GRanges_ or _GRangesList_. 
+
+```{r}
+filters <- list(SymbolFilter(c("PTEN", "BRCA1")),
+                EntrezFilter(5728), 
+                GRangesFilter(as("chr10:87869000-87876000", "GRanges")))
+transcripts_tbl(src, filter=filters)
+transcripts(src, filter=filters)
+```
+
+Transcript coordinates of gene symbol equal to "PTEN" or "BRCA1", and transcript
+start position between 87863438 and 87933487. 
+
+```{r}
+transcripts_tbl(src, filter = list(
+    SymbolFilter(c("PTEN", "BRCA1")),
+    Tx_startFilter(87863438,">="),
+    Tx_startFilter(87933487, "<=")
+))
+```
 
 ## Discussion
 
-- Critical assessment of strengths & weakness of Organism.dplyr
-p- Integration with other _Biococondutor_ and _R_ packages
-- Future development directions
+### Assessment of Organism.dplyr 
+
+#### Strengths
+
+- Combine data of gene identifiers and genomic coordinates into one sqlite 
+file
+- Provide flexibility of filters for genomic coordinates extractor functions
+- sqlite file can be stored on disk and it is easy to access multiple times
+
+#### Weakness
+
+- It takes longer time to create sqlite file the first time
+- The sqlite file could be big in size
+
+### Future development
+
+- Make filter functions more flexible by adding conditions (and, or) between 
+filters 
+
+- Support more organisms
 
 # Coordinated on-disk representation of multiple bioinformatic experiments
 
-MultiExperimentDb
+## Background
 
-Background
+Package MultiExperimentDb provides functionality for storing and comparing 
+multiple _SummarizedExperiment_ objects, the data can be added to one object 
+and stored on disk for reuse. 
 
-- ...
-- Alternative / similar approaches: MultiAssayExperiment
+This package is designed for comparing data between different experiments, the 
+experiments added to a _MultiExperimentDb_ object should have some similarity 
+such as common features or samples. This overlap allows features or samples to 
+be extracted and viewed together across experiments by combining by row or 
+column.
 
 ## Methods
 
-- On-disk representation
-- Use of DelayedMatrix
+Package MultiExperimentDb creates a _MultiExperimentDb_ object to store all
+data on disk, with assays data in matrix format stored in HDF5 file, and 
+annotation data like rowData, colDate, rowRanges stored in sqlite database. 
+
+This design reduces the overall memory footprint and can provide faster random 
+asses to subsets of data because we are indexing into data on disk vs making 
+copies of in-memory objects. By storing large matrices on disk in HDF5 file and
+displaying in R using delayed matrix, minimal data needs to be brought into R. 
+This design fastens matrix data manapulation, including subset, binding, etc.
+
+Data of _MultiExperimentDb_ object with multiple SummarizedExperiments is 
+stored in one sqlite file and one HDF5 file. Assay data in large matrix 
+format is stored in HDF5 file, when one experiment is added, assay data of
+that experiment is added to the HDF5 file as one dataset with experiment 
+name as dataset name. Rownames, colnames, rowdata, coldata, rowranges are
+stored in one sqlite database file and each experiment represented by one
+unique index and one unique experiment name. 
 
 ## Results
+
+### Constructing a _MultiExperimentDb_
+
+The `MultiExperimentDb()` constructor creates an empty _MultiExperimentDb_
+instance. When hdf5path and sqlitepath are given, files are created at the
+given path(s), otherwise temporary files are created. An empty
+_MultiExperimentDb_ object needs to be created as first step before adding 
+any experiments.
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(MultiExperimentDb))
+```
+
+Creating a _MultiExperimentDb_ instance without given paths will save the
+hdf5 and sqlite files in a tempfile():
+
+```{r}
+library(MultiExperimentDb)
+medb <- MultiExperimentDb()
+```
+
+Alternatively you can provide explicit paths to where the files should
+be saved.
+
+```{r, eval=FALSE}
+medb <- MultiExperimentDb(hdf5path = "path/to/save/hdf5/", 
+                          sqlitepath = "path/to/save/sqlite")
+```
+
+The class supports common operations such as `length()`, `dim()`,
+`dimnames()` etc.
+
+`loadMultiExperimentDb(hdf5path, sqlitepath)` can be used to create a 
+_MultiExperimentDb_ object from existing hdf5 and sqlite files stored on 
+disk. It can be used when experiments are added to _MultiExperimentDb_ object
+and saved on disk, then need to be accessed another time. 
+
+```{r}
+path <- system.file("extdata", package = "MultiExperimentDb")
+medb <- loadMultiExperimentDb(paste0(path, "/medb.h5"), 
+                              paste0(path, "/medb.sqlite"))
+medb
+```
+
+Get sqlite database path and HDF5 file path of a _MultiExperimentDb_ object
+with the `hdf5path()` and `sqlitepath()` accessors.
+
+```{r}
+hdf5path(medb)
+sqlitepath(medb)
+```
+
+### Common operations on a _MultiExperimentDb_
+
+#### Adding data
+
+An experiment (i.e., _SummarizedExperiment_ object) can be added to a 
+_MultiExperimentDb_ instance with `addExperiment()`. Experiment names must
+be unique.
+
+Add data to the _MultiExperimentDb_.
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(geuvPack))
+```
+
+```{r}
+medb <- MultiExperimentDb()
+library(geuvPack)
+data(geuFPKM)
+medb <- addExperiment(medb, geuFPKM[1:1000, 1:6], "geuFPKM1")
+medb <- addExperiment(medb, geuFPKM[300:1300, 3:8], "geuFPKM2")
+experimentNames(medb)
+medb
+```
+
+#### Extract experiment and assay data
+
+The `experiment()` function extracts a single experiment from a 
+_MultiExperimentDb_ as a _SummarizedExperiment_ object, all methods of 
+_SummarizedExperiment_ can be applied, such as `colData()`, `rowRanges()`, 
+etc.
+
+```{r}
+se <- experiment(medb, "geuFPKM1")
+colData(se)[, 1:3]
+rowRanges(se)[, 1:3]
+```
+
+Get a single assay as _DelayedMatrix_ by calling the `assay()` function with
+the _MultiExperimentDb_ and experiment name. It returns the HDF5Array assay 
+data corresponding to the current _MultiExperimentDb_ row and column 
+selections, example is given in subsetting section. 
+
+```{r}
+assay(medb, "geuFPKM1")[, 1:3]
+```
+
+
+#### Subsetting
+
+A _MultiExperimentDb_ object can be subset by overlapping rows or columns
+using standard numeric indices or feature/column names.
+
+Subset all experiments by common rownames.
+
+```{r}
+medb[c("ENSG00000171603.11","ENSG00000230216.1"),,]
+```
+
+Return a subset of the "geuFPKM1" experiment with specific rows and column names.
+
+```{r}
+medb[1:6,c("HG00099","HG00101"),"geuFPKM1"]
+```
+
+A _MultiExperimentDb_ object can also be subset by a _GRanges_ object. The 
+`grangesFromIdentifiers()` helper creates a _GRanges_ from and OrgDb, TxDb 
+and specified 'keys' and 'keytypes'. This function uses `select()` with a 
+specified OrgDb and TxDb package to convert given gene symbols or names to 
+genomic positions. See ?grangesFromIdentifiers man page for details.
+
+Convert gene symbols PTEN and BRCA1 to genomic position:
+```{r}
+granges <- grangesFromIdentifiers(org = "org.Hs.eg.db", 
+           keys = c("BRCA1", "CLSTN1","WDR45"), keytype = "SYMBOL", 
+           txdb = "TxDb.Hsapiens.UCSC.hg38.knownGene")
+granges
+```
+
+Search all experiments by gene symbol BRCA1, CLSTN1 and WDR45:
+```{r}
+medb <- medb[granges,,]
+medb
+assay(medb, "geuFPKM1")
+```
+
+A _MultiExperimentDb_ can be subset on all common rows across experiments:
+
+```{r}
+intersectRownames(medb, rownames=NULL)
+```
+
+or all common columns across experiments:
+
+```{r}
+intersectColnames(medb, colnames=NULL)
+```
+
+#### Combine by columns or rows
+
+To look at assay data of all experiments together, combine all rows of assays
+in a _MultiExperimentDb_ object with matching columns, numbers of columns of
+each experiments in the _MultiExperimentDb_ object don't need to be the same.
+When the argument `all.columns` is TRUE, the output is a matrix with columns
+across all assays where missing values are represented with NA. Default is
+FALSE, only columns that exist in all assays display.
+
+```{r}
+rbindme(medb)
+rbindme(medb, all.columns=TRUE)
+```
+
+Combine all columns of assays in a _MultiExperimentDb_ object with matching 
+rows, numbers of rows of each experiments in the _MultiExperimentDb_ object
+don't need to be the same. When the argument `all.rows` is TRUE, the output 
+is a matrix with rows across all assays where missing values are represented 
+with NA. Default is FALSE, only rows that exist in all assays display.
+
+```{r}
+cbindme(medb)
+cbindme(medb, all.rows=TRUE)
+```
+
+### Comparing treated vs untreated 'airway' data
+
+This package is designed for comparing data between different experiments 
+with similarity (overlapping features or samples across experiments). The 
+construction of displaying assay data with DelayedArray class reduces 
+memory usage and optimizes performance. Below is an example of analyzing 
+data from multiple experiments using `r Biocpkg("MultiExperimentDb")`.
+
+In the example below, a _RangedSummarizedExperiment_ object of read counts in 
+genes for an RNA-Seq experiment on human airway smooth muscle cell lines is 
+used. Two experiments are generated from airway: airway_untrt with four 
+untreated cell lines and airway_trt with four treated cell lines.
+
+Create an empty _MultiExperimentDb_ object.
+
+```{r}
+medb0 <- MultiExperimentDb()
+```
+
+Add data for treated and untreated experiments to the 'medb0' object. 
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(airway))
+```
+
+```{r}
+library(airway)
+data(airway)
+medb0 <- addExperiment(medb0, 
+            airway[,colData(airway)$dex == "untrt"], "airway_untrt")
+medb0 <- addExperiment(medb0, 
+            airway[,colData(airway)$dex == "trt"], "airway_trt")
+
+experimentNames(medb0)
+length(medb0)
+dim(medb0)
+dimnames(medb0)
+```
+
+Comparing object sizes of the airway data in the original
+_RangedSummarizedExperiment_ format to the _MultiExperimentDb_ format we see 
+the _MultiExperimentDb_ object is much smaller.
+
+```{r}
+format(object.size(airway), units = "Mb")
+
+format(object.size(medb0), units = "Mb")
+```
+
+Subset the data by the BRCA1 and BRCA2 gene symbols.
+
+```{r}
+granges <- grangesFromIdentifiers(org = "org.Hs.eg.db", 
+           keys = c("BRCA1", "BRCA2"), keytype = "SYMBOL", 
+           txdb = "TxDb.Hsapiens.UCSC.hg19.knownGene")
+medb0 <- medb0[granges,,]
+medb0
+```
+
+Look at data of experiment "airway_trt" after subset. 
+
+```{r}
+airway_trt <- experiment(medb0, "airway_trt")
+colData(airway_trt)
+rowRanges(airway_trt)
+assay(medb0, "airway_trt")
+```
+
+Combine all columns of assays in _medb_ with matching rows to look at assay 
+data of all experiments together. First four columns come from the treated data
+and the last four from untreated.
+
+```{r}
+cbindme(medb0)
+```
+
+Restore data from disk and do another subset. 
+
+```{r}
+medb1 <- loadMultiExperimentDb(hdf5path = hdf5path(medb0), 
+                               sqlitepath = sqlitepath(medb0)) 
+medb1
+```
+
+Search across treated and untreated for given rownames.
+
+```{r}
+medb1[c("ENSG00000213613","ENSG00000267595"),,]
+```
 
 ## Discussion
 
@@ -113,8 +672,16 @@ Background
 
 # References
 
+Lawrence M, Huber W, Pagès H, Aboyoun P, Carlson M, Gentleman R, Morgan M and 
+Carey V (2013). "Software for Computing and Annotating Genomic Ranges." PLoS 
+Computational Biology, 9. 
+
+citation("IRanges")
+citation("methods")
+citation("SummarizedExperiment")
+
 # Appendix
 
-1. Organism.dplyr repository, emphasize man pages and vignette
+1. Organism.dplyr repository 
 
-2. MultiExperimentDb
+2. MultiExperimentDb repository
