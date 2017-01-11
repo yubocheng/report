@@ -1,0 +1,15 @@
+Package: report 
+Title: Summary of work on Organism.dplyr and MultiExperimentDb 
+Version: 0.99.1
+Author: Yubo Chang <yubo.cheng@roswellpark.org>
+Maintainer: Yubo Chang <yubo.cheng@roswellpark.org>
+Description: Summary of work on Organism.dplyr and MultiExperimentDb
+License: Artistic-2.0
+VignetteBuilder: knitr
+Depends:
+    R (>= 3.3.0),
+Suggests:
+    GenomicRanges, 
+    knitr,
+    BiocStyle,
+    rmarkdown
