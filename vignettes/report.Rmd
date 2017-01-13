@@ -3,8 +3,7 @@ title: "Summary of work on Organism.dplyr and MultiExperimentDb"
 author: "Yubo Cheng"
 package: report 
 output:
-  BiocStyle::html_document:
-    toc: true
+  BiocStyle::pdf_document2
 vignette: |
   %\VignetteIndexEntry{Summary of work on Organism.dplyr and MultiExperimentDb}
   %\VignetteEngine{knitr::rmarkdown}
@@ -29,6 +28,8 @@ bioinformatics experiments which contains large matrix data.
 
 # Introduction
 
+
+
 # Representing and accessing SQL-based bioinformatics resources
 
 ## Background
@@ -38,8 +39,7 @@ coordinates information are being used more and more by users who analyze of
 high-throughput genomic data. 
 
 OrgDb packages are used for mapping between a central gene identifier and 
-other kinds of identifiers, while TxDb packages for connecting a set of 
-genomic coordinates to various transcript oriented features. However, since 
+other kinds of identifiers, while TxDb packages for connecting a set of  genomic coordinates to various transcript oriented features. However, since 
 organism level information and genomic coordinates information are stored in 
 different packages/databases, mapping between gene identifiers and genomic 
 ranges is not easy. For example, finding out transcript ranges according to 
@@ -118,7 +118,7 @@ suppressPackageStartupMessages({
 Running `src_organism()` without a given path will save the sqlite file to a
 tempdir():
 
-```{r}
+```{r, eval=FALSE}
 src <- src_organism("TxDb.Hsapiens.UCSC.hg38.knownGene")
 ```
 
@@ -364,7 +364,6 @@ file
 
 - Make filter functions more flexible by adding conditions (and, or) between 
 filters 
-
 - Support more organisms
 
 # Coordinated on-disk representation of multiple bioinformatic experiments
@@ -390,8 +389,9 @@ annotation data like rowData, colDate, rowRanges stored in sqlite database.
 This design reduces the overall memory footprint and can provide faster random 
 asses to subsets of data because we are indexing into data on disk vs making 
 copies of in-memory objects. By storing large matrices on disk in HDF5 file and
-displaying in R using delayed matrix, minimal data needs to be brought into R. 
-This design fastens matrix data manapulation, including subset, binding, etc.
+displaying in R using _DelayedMatrix_ object, minimal data needs to be brought 
+into R. This design fastens matrix data manipulation, including subset, 
+binding, etc.
 
 Data of _MultiExperimentDb_ object with multiple SummarizedExperiments is 
 stored in one sqlite file and one HDF5 file. Assay data in large matrix 
@@ -500,7 +500,6 @@ selections, example is given in subsetting section.
 assay(medb, "geuFPKM1")[, 1:3]
 ```
 
-
 #### Subsetting
 
 A _MultiExperimentDb_ object can be subset by overlapping rows or columns
@@ -525,6 +524,7 @@ specified OrgDb and TxDb package to convert given gene symbols or names to
 genomic positions. See ?grangesFromIdentifiers man page for details.
 
 Convert gene symbols PTEN and BRCA1 to genomic position:
+
 ```{r}
 granges <- grangesFromIdentifiers(org = "org.Hs.eg.db", 
            keys = c("BRCA1", "CLSTN1","WDR45"), keytype = "SYMBOL", 
@@ -533,6 +533,7 @@ granges
 ```
 
 Search all experiments by gene symbol BRCA1, CLSTN1 and WDR45:
+
 ```{r}
 medb <- medb[granges,,]
 medb
@@ -580,7 +581,7 @@ cbindme(medb, all.rows=TRUE)
 
 This package is designed for comparing data between different experiments 
 with similarity (overlapping features or samples across experiments). The 
-construction of displaying assay data with DelayedArray class reduces 
+construction of displaying assay data with _DelayedMatrix_ object reduces 
 memory usage and optimizes performance. Below is an example of analyzing 
 data from multiple experiments using `r Biocpkg("MultiExperimentDb")`.
 
@@ -668,20 +669,100 @@ medb1[c("ENSG00000213613","ENSG00000267595"),,]
 
 ## Discussion
 
+MultiExperimentDb package is created for storing and comparing different 
+bioinformatic experiments in _SummarizedExperiment_ format within one object, 
+so the experiments added to a _MultiExperimentDb_ object should have some 
+similarity such as common features or samples. It can be used for analyzing 
+data from multiple similar experiments. Also it works better with experiments 
+which contains large data matrices (for example, microarray gene expression 
+data, read counts in genes for RNA-Seq experiments, etc.) and small annotation 
+data (rowData, colDate and rowRanges). 
+
+The size of HDF5 file is relatively small, but sqlite file can be big if 
+annotation data is big. However, even when sqlite file is big, it is stored on 
+disk, and when a _MultiExperimentDb_ object is created to point to the sqlite 
+file and HDF5 file, the object size is smaller than the original 
+_SummarizedExperiment_ objects. Besides, by using _DelayedMatrix_ to display 
+assay data in R, subset and binding functions return results quickly. 
+
 # Summary and Conclusions
 
-# References
 
+
+# References
+<!-- AnnotationDbi --> 
+Pages H, Carlson M, Falcon S and Li N (2016). AnnotationDbi: Annotation 
+Database Interface. R package version 1.37.0.
+
+<!-- BiocGenerics --> 
+Huber, W., Carey, J. V, Gentleman, R., Anders, S., Carlson, M., Carvalho, S. B,
+Bravo, C. H, Davis, S., Gatto, L., Girke, T., Gottardo, R., Hahne, F., Hansen, 
+D. K, Irizarry, A. R, Lawrence, M., Love, I. M, MacDonald, J., Obenchain, V., 
+Ole's, K. A, Pag'es, H., Reyes, A., Shannon, P., Smyth, K. G, Tenenbaum, D., 
+Waldron, L., Morgan and M. (2015). "Orchestrating high-throughput genomic 
+analysis with Bioconductor." Nature Methods, 12(2), pp. 115-121.
+
+<!-- BiocStyle --> 
+Oles A, Morgan M and Huber W (2016). BiocStyle: Standard styles for vignettes 
+and other Bioconductor documents. R package version 2.3.28.
+
+<!-- DBI --> 
+Hadley Wickham, Kirill Müller (2016). DBI: R Database Interface. R package 
+version 0.5-1.
+
+<!-- DelayedArray --> 
+Pagès H (2016). DelayedArray: Delayed operations on array-like objects. R 
+package version 0.1.3.
+
+<!-- devtools --> 
+Hadley Wickham, Winston Chang, RStudio, R Core team (2016). devtools: Tools to 
+Make Developing R Packages Easier. R package version 1.12.0.
+
+<!-- GenomeInfoDb --> 
+Arora S, Morgan M, Carlson M and Pagès H (2016). GenomeInfoDb: Utilities for 
+manipulating chromosome and other 'seqname' identifiers. R package version 
+1.11.6.
+
+<!-- GenomicFeatures --> 
 Lawrence M, Huber W, Pagès H, Aboyoun P, Carlson M, Gentleman R, Morgan M and 
 Carey V (2013). "Software for Computing and Annotating Genomic Ranges." PLoS 
-Computational Biology, 9. 
+Computational Biology, 9.
 
-citation("IRanges")
-citation("methods")
-citation("SummarizedExperiment")
+<!-- GenomicRanges --> 
+Lawrence M, Huber W, Pagès H, Aboyoun P, Carlson M, Gentleman R, Morgan M and 
+Carey V (2013). "Software for Computing and Annotating Genomic Ranges." PLoS 
+Computational Biology, 9.
+
+<!-- HDF5Array --> 
+Pagès H (2016). HDF5Array: HDF5 back end for DelayedArray objects. R package 
+version 1.3.4.
+
+<!-- IRanges --> 
+Lawrence M, Huber W, Pagès H, Aboyoun P, Carlson M, Gentleman R, Morgan M and 
+Carey V (2013). "Software for Computing and Annotating Genomic Ranges." PLoS 
+Computational Biology, 9.
+
+<!-- rhdf5 --> 
+Fischer B and Pau G (2016). rhdf5: HDF5 interface to R. R package version 
+2.19.0.
+
+<!-- RSQLite --> 
+Kirill Müller, Hadley Wickham, David A. James, Seth Falcon, Liam Healy. 
+RSQLite: 'SQLite' Interface for R. R package version 1.1-2. 
+
+<!-- S4Vectors --> 
+Pagès H, Lawrence M and Aboyoun P (2016). S4Vectors: S4 implementation of 
+vectors and lists. R package version 0.13.5.
+
+<!-- SummarizedExperiment --> 
+Morgan M, Obenchain V, Hester J and Pagès H (2016). SummarizedExperiment: 
+SummarizedExperiment container. R package version 1.5.3.
+
+<!-- testthat --> 
+Wickham, Hadley. "testthat: Get started with testing." The R Journal 3.1 
+(2011): 5-10.
 
 # Appendix
 
 1. Organism.dplyr repository 
-
 2. MultiExperimentDb repository
