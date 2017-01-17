@@ -1,5 +1,5 @@
 ---
-title: "Summary of work on Organism.dplyr and MultiExperimentDb"
+title: "Store and query genome data with database back-end"
 author: "Yubo Cheng"
 package: report 
 output:
@@ -19,8 +19,8 @@ understanding bioinformatics data. Bioconductor contains plenty of resources of
 annotation data and experiment data, but it is not always easy and fast to 
 query them. 
 
-Two R packages: Organism.dplyr and MultiExperimentDb are developed for easier 
-use of genome wide annotation packages and comparison between multiple 
+Two R packages: `Organism.dplyr` and `MultiExperimentDb` are developed for 
+easier use of genome wide annotation packages and comparison between multiple 
 experiments. Organism.dplyr provides an integrated presentation of mapping 
 between organism level information and genomic coordinates information, while 
 MultiExperimentDb provides functionality for storing and comparing multiple 
@@ -28,7 +28,14 @@ bioinformatics experiments which contains large matrix data.
 
 # Introduction
 
+This project aims to resolve two problems: easy use of annotation resource 
+about organism level information and genomic coordinates information, and 
+storing and manipulating multiple experiments in _SummarizedExperiment_ format 
+in one object. 
 
+R packages `Organism.dplyr` and `MultiExperimentDb` are developed to solve the 
+problems and the details are described below. For each package, developing 
+background, methodology, result display and discussion are illustrated. 
 
 # Representing and accessing SQL-based bioinformatics resources
 
@@ -56,7 +63,7 @@ TxDb.Hsapiens.UCSC.hg38.knownGene).
 
 #### Data representation
 
-Package Organism.dplyr stores data using on disk sqlite database file 
+Package `Organism.dplyr` stores data using on disk sqlite database file 
 combining data from a given 'TxDb' package and the corresponding 'org' 
 package, thus one database contains information of gene identifiers and 
 genomic coordinates. Once the database is created and stored at given 
@@ -370,7 +377,7 @@ filters
 
 ## Background
 
-Package MultiExperimentDb provides functionality for storing and comparing 
+Package `MultiExperimentDb` provides functionality for storing and comparing 
 multiple _SummarizedExperiment_ objects, the data can be added to one object 
 and stored on disk for reuse. 
 
@@ -382,7 +389,7 @@ column.
 
 ## Methods
 
-Package MultiExperimentDb creates a _MultiExperimentDb_ object to store all
+Package `MultiExperimentDb` creates a _MultiExperimentDb_ object to store all
 data on disk, with assays data in matrix format stored in HDF5 file, and 
 annotation data like rowData, colDate, rowRanges stored in sqlite database. 
 
@@ -669,7 +676,7 @@ medb1[c("ENSG00000213613","ENSG00000267595"),,]
 
 ## Discussion
 
-MultiExperimentDb package is created for storing and comparing different 
+`MultiExperimentDb` package is created for storing and comparing different 
 bioinformatic experiments in _SummarizedExperiment_ format within one object, 
 so the experiments added to a _MultiExperimentDb_ object should have some 
 similarity such as common features or samples. It can be used for analyzing 
@@ -687,7 +694,23 @@ assay data in R, subset and binding functions return results quickly.
 
 # Summary and Conclusions
 
+Two R packages: `Organism.dplyr` and `MultiExperimentDb` are developed. 
+Organism.dplyr provides an integrated presentation of mapping between organism 
+level information and genomic coordinates information, while MultiExperimentDb 
+provides functionality for storing and comparing multiple bioinformatics 
+experiments which contains large matrix data. 
 
+These two packages have the following features: 
+
+- Use of back-end sqlite file and HDF5 file represents reusable on disk data 
+storage.
+- Use of dplyr and DelayedMatrix to manipulate data and bring data into R 
+improves implementing efficiency.
+- These two packages work well with other bioconductor packages, including 
+software packages: `dplyr`, `RSQLite`, `GenomicRanges`, `GenomicFeatures`, 
+`AnnotationDbi`, `SummarizedExperiment`, etc., AnnotationData packages: Org.* 
+packages and TxDb. * packages, as well as ExperimentData packages in 
+_SummarizedExperiment_ format.
 
 # References
 <!-- AnnotationDbi --> 
