@@ -1,0 +1,497 @@
+Store and query genome data with database back-end
+========================================================
+author: Yubo Cheng
+date: 
+autosize: true
+
+Outline
+========================================================
+
+- Introduction
+- Organism.dplyr
+  - Background
+  - Method
+  - Result
+  - Discussion
+- MultiExperimentDb
+  - Method
+  - Result
+  - Discussion
+- summary
+
+Introduction
+========================================================
+
+- `Organism.dplyr`
+
+Provides an integrated presentation of mapping between organism level 
+information and genomic coordinates information
+
+- `MultiExperimentDb`
+
+Provides functionality for storing and comparing multiple bioinformatics 
+experiments which contains large matrix data
+
+Organism.dplyr - Background
+========================================================
+
+- OrgDb packages: mapping between a central gene identifier and other 
+identifiers
+
+- TxDb packages: connecting a set of  genomic coordinates to various transcript
+oriented features
+
+- `Organism.dplyr`: provides an alternative interface of gene identifier 
+mapping functionality and the genome coordinate functionality of the TxDb 
+packages
+
+Organism.dplyr - Method
+========================================================
+
+Approach
+
+- on disk sqlite database file
+- separate sql schema from R codes
+- use of `dplyr`
+- unit test
+- `roxygen2` for documentation
+- helper functions for reuse
+
+Feature
+
+- mapping between gene identifiers and range coordinates
+- filters applied to genomic coordinates extractor functions
+
+Organism.dplyr - Result (construction)
+========================================================
+
+Constructing a _src_organism_
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages({
+    library(Organism.dplyr)
+    library(ggplot2)
+})
+```
+
+```{r, eval=FALSE}
+src <- src_organism("TxDb.Hsapiens.UCSC.hg38.knownGene", "path/to/save/sqlite")
+```
+
+```{r, eval=FALSE}
+src <- src_ucsc("human", "path/to/save/sqlite")
+```
+
+```{r, eval=FALSE}
+src <- src_ucsc("TxDb.Hsapiens.UCSC.hg38.knownGene")
+```
+
+Organism.dplyr - Result (construction)
+========================================================
+
+Access existing sqlite file
+
+```{r}
+path <- system.file("extdata", package = "Organism.dplyr")
+src <- src_organism(dbpath = paste0(path, "/example.sqlite"))
+src
+```
+
+Organism.dplyr - Result (Basic operations)
+========================================================
+
+Look at all available tables. 
+```{r}
+src_tbls(src)
+```
+
+Look at fields of one table. 
+```{r}
+colnames(tbl(src, "id"))
+```
+
+Organism.dplyr - Result (Basic operations)
+========================================================
+
+Look at data from one specific table. 
+```{r}
+head(tbl(src, "id"))
+```
+
+Organism.dplyr - Result (Basic operations)
+========================================================
+
+Gene symbol start with "BRCA"
+
+```{r}
+tbl(src, "id") %>% 
+    filter(symbol %like% "BRCA%") %>% 
+    dplyr::select(entrez, map, ensembl, symbol) %>% 
+    distinct() %>% arrange(symbol) %>% collect()
+```
+
+Organism.dplyr - Result (Basic operations)
+========================================================
+
+Genes transcripts count
+
+```{r}
+txcount <- inner_join(tbl(src, "id"), tbl(src, "ranges_tx")) %>% 
+    dplyr::select(symbol, tx_id) %>% 
+    group_by(symbol) %>% 
+    summarise(count = count(symbol)) %>% 
+    dplyr::select(symbol, count) %>% 
+    arrange(desc(count)) %>% 
+    collect(n=Inf)
+
+txcount
+```
+
+Organism.dplyr - Result ("select" interface)
+========================================================
+
+Methods `select()`, `keytypes()`, `keys()`, `columns()` and `mapIds` from 
+`AnnotationDbi` are implemented for _src_organism_ objects.
+
+`keytypes(x)`: keytypes can be passed to keytype argument of methods 
+`select()` or `keys()`.
+
+```{r}
+keytypes(src)
+```
+
+Organism.dplyr - Result ("select" interface)
+========================================================
+
+`keys(x, keytype, ...)`: returns keys for the _src_organism_ object
+
+keys of entrez
+```{r}
+head(keys(src))
+```
+
+keys of symbol
+```{r}
+head(keys(src, "symbol"))
+```
+
+Organism.dplyr - Result ("select" interface)
+========================================================
+
+`select_tbl(x, keys, columns, keytype)` and `select(x, keys, columns, 
+keytype)`: retrieves the data as a _tibble_ or data frame based on 
+parameters for selected keys, columns and keytype arguments
+
+```{r}
+keytype <- "symbol"
+keys <- c("PTEN", "BRCA1")
+columns <- c("entrez", "tx_id", "tx_name","exon_id")
+```
+
+```{r}
+select_tbl(src, keys, columns, keytype)
+```
+
+Organism.dplyr - Result ("select" interface)
+========================================================
+
+`mapIds(x, keys, column, keytype, ..., multiVals)`: gets the mapped ids 
+(column) for a set of keys that are of a particular keytype. Usually 
+returned as a named character vector.
+
+```{r}
+mapIds(src, keys, column = "tx_name", keytype)
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+genomic coordinates extractor methods: 
+
+`transcripts()`, `exons()`, `cds()`, `genes()`, `promoters()`, 
+`transcriptsBy()`, `exonsBy()`, `cdsBy()`, `intronsByTranscript()`, 
+`fiveUTRsByTranscript()`, `threeUTRsByTranscript()`
+
+two versions: 
+
+- `transcripts_tbl()` returns _tibble_
+- `transcripts()` returns _GRanges_
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+```{r}
+transcripts_tbl(src)
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+```{r}
+transcripts(src)
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+- filters to restrict the output 
+- 54 column name filters and `GRangesFilter()`
+
+```{r}
+head(possibleFilters())
+length(possibleFilters())
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+two parameters for filter: 
+
+- condition: one of "==", "!=", "startsWith", "endsWith", ">", "<", ">=" 
+and "<=", default "==" 
+- value: character vector, integer vector, _GRanges_
+
+```{r}
+EnsemblFilter("ENSG00000171862")
+SymbolFilter("BRCA", "startsWith")
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+```{r}
+filters <- list(SymbolFilter(c("PTEN", "BRCA1")),
+                EntrezFilter(5728), 
+                GRangesFilter(as("chr10:87869000-87876000", "GRanges")))
+```
+
+```{r}
+transcripts_tbl(src, filter=filters)
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+```{r}
+transcripts(src, filter=filters)
+```
+
+Organism.dplyr - Result (Genomic coordinates extractors)
+========================================================
+
+```{r}
+transcripts_tbl(src, filter = list(
+    SymbolFilter(c("PTEN", "BRCA1")),
+    Tx_startFilter(87863438,">="),
+    Tx_startFilter(87933487, "<=")
+))
+```
+
+
+Organism.dplyr - Discussion
+========================================================
+
+Strengths
+- Combine data of gene identifiers and genomic coordinates into one 
+sqlite file
+- Provide flexibility of filters for genomic coordinates extractor 
+functions
+- sqlite file can be stored on disk and it is easy to access multiple 
+times
+
+Weakness
+- It takes longer time to create sqlite file the first time
+- The sqlite file could be big in size
+
+Future development
+
+- Make filter functions more flexible by adding conditions (and, or) 
+between filters 
+- Support more organisms
+
+MultiExperimentDb - Method
+========================================================
+
+- Storing and comparing multiple bioinformatic experiments in 
+_SummarizedExperiment_ format within one object
+
+- Assays data in matrix format stored in HDF5 file, and annotation data 
+like rowData, colDate, rowRanges stored in sqlite database
+
+- Reduces the overall memory footprint and can provide faster random 
+asses to subsets of data
+
+MultiExperimentDb - Result (construction)
+========================================================
+
+Constructing a _MultiExperimentDb_
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(MultiExperimentDb))
+```
+
+```{r}
+medb <- MultiExperimentDb()
+```
+
+```{r, eval=FALSE}
+medb <- MultiExperimentDb(hdf5path = "path/to/save/hdf5/", 
+                          sqlitepath = "path/to/save/sqlite")
+```
+
+MultiExperimentDb - Result (construction)
+========================================================
+
+create a _MultiExperimentDb_ object from existing hdf5 and sqlite files 
+stored on disk.
+
+```{r}
+path <- system.file("extdata", package = "MultiExperimentDb")
+medb <- loadMultiExperimentDb(paste0(path, "/medb.h5"), 
+                              paste0(path, "/medb.sqlite"))
+medb
+```
+
+MultiExperimentDb - Result (construction)
+========================================================
+
+```{r}
+hdf5path(medb)
+sqlitepath(medb)
+dim(medb)
+dimnames(medb)
+```
+
+MultiExperimentDb - Result (Adding data)
+========================================================
+
+```{r, echo=FALSE}
+suppressPackageStartupMessages(library(geuvPack))
+```
+
+```{r}
+medb1 <- MultiExperimentDb()
+```
+
+```{r, eval=FALSE}
+data(geuFPKM)
+medb1 <- addExperiment(medb, geuFPKM[1:1000, 1:6], "geuFPKM1")
+medb1 <- addExperiment(medb, geuFPKM[300:1300, 3:8], "geuFPKM2")
+```
+
+```{r}
+experimentNames(medb)
+```
+
+MultiExperimentDb - Result (Extract experiment)
+========================================================
+
+```{r}
+se <- experiment(medb, "geuFPKM1")
+colData(se)[, 1:3]
+```
+
+MultiExperimentDb - Result (Extract assay data)
+========================================================
+
+```{r}
+assay(medb, "geuFPKM1")[, 1:3]
+```
+
+MultiExperimentDb - Result (Subsetting)
+========================================================
+
+Subsetting
+
+```{r}
+medb[1:6,c("HG00099","HG00101"),"geuFPKM1"]
+```
+
+MultiExperimentDb - Result (Subsetting)
+========================================================
+
+Subset by _GRanges_
+
+```{r}
+granges <- grangesFromIdentifiers(org = "org.Hs.eg.db", 
+           keys = c("BRCA1", "CLSTN1","WDR45"), keytype = "SYMBOL", 
+           txdb = "TxDb.Hsapiens.UCSC.hg38.knownGene")
+granges
+```
+
+MultiExperimentDb - Result (Subsetting)
+========================================================
+
+```{r}
+medb <- medb[granges,,]
+medb
+```
+
+MultiExperimentDb - Result (Subsetting)
+========================================================
+
+```{r}
+assay(medb, "geuFPKM1")
+```
+
+MultiExperimentDb - Result (Subsetting)
+========================================================
+
+Subset on all common rows across experiments
+
+```{r}
+intersectRownames(medb, rownames=NULL)
+```
+
+MultiExperimentDb - Result (Subsetting)
+========================================================
+
+Subset on all common columns across experiments
+
+```{r}
+intersectColnames(medb, colnames=NULL)
+```
+
+MultiExperimentDb - Result (Combine by rows)
+========================================================
+
+```{r}
+rbindme(medb)
+rbindme(medb, all.columns=TRUE)
+```
+
+
+MultiExperimentDb - Result (Combine by columns)
+========================================================
+
+```{r}
+cbindme(medb)
+cbindme(medb, all.rows=TRUE)
+```
+
+MultiExperimentDb - Discussion
+========================================================
+
+- The experiments added to a _MultiExperimentDb_ object should have some 
+similarity such as common features or samples
+
+- Works better with experiments which contains large data matrices and 
+small annotation data
+
+- The size of HDF5 file is relatively small, but sqlite file can be big if
+annotation data is big
+
+- Subset and binding functions return results quickly by using
+_DelayedMatrix_ to display assay data in R
+
+Summary
+========================================================
+
+- Developed two R packages: `Organism.dplyr` and `MultiExperimentDb`
+- - Use of back-end sqlite file and HDF5 file represents reusable on disk 
+data storage
+- Use of dplyr and DelayedMatrix to manipulate data and bring data into R 
+improves implementing efficiency.
+- Work well with other bioconductor packages
+
+
