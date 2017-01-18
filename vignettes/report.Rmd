@@ -1,9 +1,10 @@
 ---
-title: "Store and query genome data with database back-end"
+title: "Summary of work on Organism.dplyr and MultiExperimentDb"
 author: "Yubo Cheng"
 package: report 
 output:
-  BiocStyle::pdf_document2
+  BiocStyle::pdf_document2:
+    toc: true 
 vignette: |
   %\VignetteIndexEntry{Summary of work on Organism.dplyr and MultiExperimentDb}
   %\VignetteEngine{knitr::rmarkdown}
@@ -19,8 +20,8 @@ understanding bioinformatics data. Bioconductor contains plenty of resources of
 annotation data and experiment data, but it is not always easy and fast to 
 query them. 
 
-Two R packages: `Organism.dplyr` and `MultiExperimentDb` are developed for 
-easier use of genome wide annotation packages and comparison between multiple 
+Two R packages: Organism.dplyr and MultiExperimentDb are developed for easier 
+use of genome wide annotation packages and comparison between multiple 
 experiments. Organism.dplyr provides an integrated presentation of mapping 
 between organism level information and genomic coordinates information, while 
 MultiExperimentDb provides functionality for storing and comparing multiple 
@@ -28,14 +29,7 @@ bioinformatics experiments which contains large matrix data.
 
 # Introduction
 
-This project aims to resolve two problems: easy use of annotation resource 
-about organism level information and genomic coordinates information, and 
-storing and manipulating multiple experiments in _SummarizedExperiment_ format 
-in one object. 
 
-R packages `Organism.dplyr` and `MultiExperimentDb` are developed to solve the 
-problems and the details are described below. For each package, developing 
-background, methodology, result display and discussion are illustrated. 
 
 # Representing and accessing SQL-based bioinformatics resources
 
@@ -45,17 +39,19 @@ Annotation packages in _Bioconductor_ which hold organism level and genomic
 coordinates information are being used more and more by users who analyze of 
 high-throughput genomic data. 
 
-OrgDb packages are used for mapping between a central gene identifier and 
-other kinds of identifiers, while TxDb packages for connecting a set of  genomic coordinates to various transcript oriented features. However, since 
-organism level information and genomic coordinates information are stored in 
-different packages/databases, mapping between gene identifiers and genomic 
-ranges is not easy. For example, finding out transcript ranges according to 
+OrgDb packages are used for mapping between a central gene identifier and other
+identifiers while the TxDb packages contain information for connecting a set of
+genomic coordinates to various transcript oriented features. However, since
+organism level information and genomic coordinates information are stored in
+different packages/databases, mapping between gene identifiers and genomic
+ranges is not easy. For example, finding the transcript ranges according to
 accession number.
 
-Organism.dplyr provides an alternative interface of gene identifier mapping 
-functionality of the OrgDb packages (e.g.,org.Hs.eg.db) and the genome 
-coordinate functionality of the TxDb packages (e.g., 
-TxDb.Hsapiens.UCSC.hg38.knownGene).
+Organism.dplyr provides an alternative interface to these data by integrating
+the gene identifier mapping functionality of the OrgDb packages
+(e.g.,org.Hs.eg.db) and the genome coordinate functionality of the TxDb
+packages (e.g., TxDb.Hsapiens.UCSC.hg38.knownGene).
+
 
 ## Methods
 
@@ -63,57 +59,64 @@ TxDb.Hsapiens.UCSC.hg38.knownGene).
 
 #### Data representation
 
-Package `Organism.dplyr` stores data using on disk sqlite database file 
+The Organism.dplyr package stores data in an on disk sqlite database file 
 combining data from a given 'TxDb' package and the corresponding 'org' 
 package, thus one database contains information of gene identifiers and 
 genomic coordinates. Once the database is created and stored at given 
 directory, it can be accessed another time. 
 
-Data of OrgDb and TxDb are reconstructed and new tables are created in sqlite
-file. SQL codes for creating the database, including both schema and data, 
-are stored in sql files, one file for each organism, separating from the rest
-of R codes. This strategy makes the SQL codes clean and easy to maintain. 
+Data from the OrgDb and TxDb packages are reconstructed and new tables are
+created in sqlite file. SQL code for creating the database, including both
+schema and data, are stored in sql files, one file for each organism,
+separating from the rest of R code. This strategy makes the SQL code clean and
+easy to maintain. 
 
 A _src_organism_ object is created by this package to point to the database. 
-R Package `dplyr` (a grammar of data manipulation) could be applied to object
-created by this package.
+Methods from the R Package `dplyr` (a grammar of data manipulation) can be 
+applied to the object created by this package.
 
 #### Software development
 
 Best practices are applied to the software development: 
 
-- Unit tests are created to make sure each module of the codes works 
-properly.
+- Unit tests are created to make sure each module of the code works properly.
 - R Package `roxygen2` is used for documentation of namespace and help pages.
 - Object oriented programming is used for developing this package, and 
-repeated codes are extracted to separate functions for reuse.
+repeated code are extracted to separate functions for reuse.
+
+FIXME: Add a bit about compatibility / interoperability, e.g., you've 
+supported 
+  - the select() interface that worked on OrgDbs 
+  - extraction methods from GenomicFeatures that worked on TxDbs
+  - methods from dplyr 
 
 ### Features
 
-This package provides functionalities of gene identifiers (entrez id, gene 
-symbol, ensembl id, accession number, ipi number, go id, etc.) mapping, as 
-well as mapping between identifiers and range coordinates (including 
-different levels: gene, transcription, exon and cds). 
+This package provides an interface to map between gene identifiers (entrez id,
+gene symbol, ensembl id, accession number, ipi number, go id, etc.) as well as
+between identifiers and range coordinates (including different levels: gene,
+transcription, exon and cds). 
 
 Filters can be applied to genomic coordinates extractor functions, and all 
 columns in the database can be possible filters. The filter functions give 
 users flexibility of extracting genomic coordinates using combination of 
 different conditions.
 
-With all the data stored in sqlite file on disk, users need to create a 
-_src_organism_ object to point to the database file, and only necessary data 
-is brought into _R_ instead of the whole database for each _R_ command.
+The data are stored in a sqlite file on disk and accessed by invoking methods
+on a _src_organism_ object. The _src_organism_ points to the database file and
+only reads in the subset of data required to perform the `R command` instead of
+the whole database.
+
 
 ## Results
 
-### Constructing a _src_organism_
+### Constructing a _src_organism_ object
 
-#### Make sqlite datebase from 'TxDb' package
-
-The `src_organism()` constructor creates an on disk sqlite database file with
-data from a given 'TxDb' package and corresponding 'org' package. When dbpath
-is given, file is created at the given path, otherwise temporary file is
-created.
+A _src_organism_ object can be created by supplying the name of a 'TxDb'
+package or an organism name. In both cases, the underlying database is
+constructed from data in both the 'TxDb' and corresponding 'org' package.
+Supported organisms and mapping releationships can be seen with 
+'supportedOrganims()'.
 
 ```{r, echo=FALSE}
 suppressPackageStartupMessages({
@@ -121,6 +124,19 @@ suppressPackageStartupMessages({
     library(ggplot2)
 })
 ```
+
+```{r, eval=FALSE}
+    library(Organism.dplyr)
+    library(ggplot2)
+    supportedOrganisms()
+```
+
+#### Make sqlite database by specifying a 'TxDb'
+
+The `src_organism()` constructor creates an on disk sqlite database file with
+data from a 'TxDb' package and corresponding 'org' package. When the dbpath is
+specified the file is created at the given path, otherwise a temporary file is
+created.
 
 Running `src_organism()` without a given path will save the sqlite file to a
 tempdir():
@@ -136,19 +152,11 @@ be saved.
 src <- src_organism("TxDb.Hsapiens.UCSC.hg38.knownGene", "path/to/save/sqlite")
 ```
 
-`supportedOrganisms()` provides a list of organisms with corresponding 'org' 
-and 'TxDb' packages being supported.
+#### Make sqlite database by specifying organism name
 
-```{r}
-supportedOrganisms()
-```
-
-#### Make sqlite datebase from organism name
-
-Organism name, genome and id could be specified to create sqlite database. 
-Organism name (either Organism or common name) must be provided to create the 
-database, if genome and/or id are not provided, most recent 'TxDb' package is 
-used.
+The `src_ucsc()` constructor creates a _src_organism_ object from an organism
+name, genome and identifer. If the genome and identifier are not provided the
+most recent 'TxDb' pacakge is used.
 
 ```{r, eval=FALSE}
 src <- src_ucsc("human", "path/to/save/sqlite")
@@ -156,7 +164,7 @@ src <- src_ucsc("human", "path/to/save/sqlite")
 
 #### Access existing sqlite file 
 
-Existing on disk sqlite file can be accessed without recreating the database. 
+An existing on disk sqlite file can be accessed without recreating the database. 
 
 ```{r}
 path <- system.file("extdata", package = "Organism.dplyr")
@@ -168,7 +176,7 @@ src
 
 #### Basic operations
 
-All methods from package [dplyr][] can be used for a _src_organism_ object. 
+All methods from package [dplyr][] can be used on a _src_organism_ object. 
 
 Look at all available tables. 
 ```{r}
@@ -307,13 +315,17 @@ mapIds(src, keys, column = "tx_name", keytype)
 Eleven genomic coordinates extractor methods are available in this package: 
 `transcripts()`, `exons()`, `cds()`, `genes()`, `promoters()`, 
 `transcriptsBy()`, `exonsBy()`, `cdsBy()`, `intronsByTranscript()`, 
-`fiveUTRsByTranscript()`, `threeUTRsByTranscript()`. Two versions of results 
-are provided: _tibble_ (`transcripts_tbl()`) and _GRanges_ or _GRangesList_ 
-(`transcripts()`). 
+`fiveUTRsByTranscript()`, `threeUTRsByTranscript()`.
 
-Filter can be applied to all extractor functions. A named list of vectors can 
-be used to restrict the output, valid filters can be retrieved by 
-`possibleFilters()`. 
+These extractors are similar to those in the `GenomicFeatures` package with a
+couple of notable differences. The first is that all extractors have a '_tbl'
+counterpart function, e.g., `exons_tbl()`, which return a _tibble_ object from
+the `dplyr` package instead of the usual _GRanges_ or _GRangesList_.
+
+The second difference is the enhanced functionality of the 'filter' argument. 
+In Organism.dplyr methods, the 'filter' argument can be a list of filters
+defined by any variable in the database. Use `possibleFilters()` to see all
+options.
 
 ```{r}
 possibleFilters()
@@ -327,7 +339,6 @@ condition is "==".
 EnsemblFilter("ENSG00000171862")
 SymbolFilter("BRCA", "startsWith")
 ```
-
 
 Besides, `GRangesFilter()` could also be used as filter for the methods with 
 result displaying as _GRanges_ or _GRangesList_. 
@@ -377,7 +388,7 @@ filters
 
 ## Background
 
-Package `MultiExperimentDb` provides functionality for storing and comparing 
+Package MultiExperimentDb provides functionality for storing and comparing 
 multiple _SummarizedExperiment_ objects, the data can be added to one object 
 and stored on disk for reuse. 
 
@@ -389,7 +400,7 @@ column.
 
 ## Methods
 
-Package `MultiExperimentDb` creates a _MultiExperimentDb_ object to store all
+Package MultiExperimentDb creates a _MultiExperimentDb_ object to store all
 data on disk, with assays data in matrix format stored in HDF5 file, and 
 annotation data like rowData, colDate, rowRanges stored in sqlite database. 
 
@@ -676,7 +687,7 @@ medb1[c("ENSG00000213613","ENSG00000267595"),,]
 
 ## Discussion
 
-`MultiExperimentDb` package is created for storing and comparing different 
+MultiExperimentDb package is created for storing and comparing different 
 bioinformatic experiments in _SummarizedExperiment_ format within one object, 
 so the experiments added to a _MultiExperimentDb_ object should have some 
 similarity such as common features or samples. It can be used for analyzing 
@@ -694,23 +705,7 @@ assay data in R, subset and binding functions return results quickly.
 
 # Summary and Conclusions
 
-Two R packages: `Organism.dplyr` and `MultiExperimentDb` are developed. 
-Organism.dplyr provides an integrated presentation of mapping between organism 
-level information and genomic coordinates information, while MultiExperimentDb 
-provides functionality for storing and comparing multiple bioinformatics 
-experiments which contains large matrix data. 
 
-These two packages have the following features: 
-
-- Use of back-end sqlite file and HDF5 file represents reusable on disk data 
-storage.
-- Use of dplyr and DelayedMatrix to manipulate data and bring data into R 
-improves implementing efficiency.
-- These two packages work well with other bioconductor packages, including 
-software packages: `dplyr`, `RSQLite`, `GenomicRanges`, `GenomicFeatures`, 
-`AnnotationDbi`, `SummarizedExperiment`, etc., AnnotationData packages: Org.* 
-packages and TxDb. * packages, as well as ExperimentData packages in 
-_SummarizedExperiment_ format.
 
 # References
 <!-- AnnotationDbi --> 

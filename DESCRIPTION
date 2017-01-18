@@ -1,6 +1,6 @@
 Package: report 
 Title: Summary of work on Organism.dplyr and MultiExperimentDb 
-Version: 0.99.1
+Version: 0.99.2
 Author: Yubo Chang <yubo.cheng@roswellpark.org>
 Maintainer: Yubo Chang <yubo.cheng@roswellpark.org>
 Description: Summary of work on Organism.dplyr and MultiExperimentDb
